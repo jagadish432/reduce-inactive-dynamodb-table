@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "serverless-plugin-additional-stacks": "^1.5.0",
+    "serverless-python-requirements": "^5.1.0"
+  }
+}

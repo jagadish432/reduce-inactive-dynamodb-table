@@ -1,0 +1,65 @@
+# ********************* #
+# SERVICE CONFIGURATION #
+# ********************* #
+service: inactive-dynamodb-table-${opt:stage, 'dev'}
+
+frameworkVersion: ">=1.1.0 <2.0.0"
+
+plugins:
+  - serverless-python-requirements
+  - serverless-plugin-additional-stacks
+
+provider:
+  name: aws
+  runtime: python3.8
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'us-east-2'}
+  deploymentBucket: ${self:custom.variables.${opt:stage, self:provider.stage}.deployment_bucket}
+  environment:
+    stage : ${opt:stage, self:provider.stage}
+    days_to_search_from: ${self:custom.variables.${opt:stage, self:provider.stage}.days_to_search_from}
+    sns_arn:
+      Fn::ImportValue: inactive-dynamodb-SNS-ARN-${opt:stage, self:provider.stage}
+
+  pythonRequirements:
+    pythonBin: python3.8
+
+functions:
+  inactiveDynamoDBFinder:
+    handler: index.lambda_handler
+    name: inactiveDynamoDBFinder-${opt:stage, 'dev'}
+    description: Finds inactive dynamodb tables and change their I/O mode to On-Demand and publishes message to SNS topic
+    timeout: 900
+
+
+custom:
+  variables: ${file(serverless.env.yml)}
+
+ # Additional Stacks
+  additionalStacks:
+  # Base resources - SNS, IAM
+    BaseResourcesStack:
+      # Create resources before functions(if any) eg. sls deploy --env
+      Deploy: Before
+      Resources:
+        SNSTopic:
+          Type: AWS::SNS::Topic
+          Properties:
+            DisplayName: ${self:custom.variables.${opt:stage, self:provider.stage}.sns_name}
+            TopicName: ${self:custom.variables.${opt:stage, self:provider.stage}.sns_name}
+            Subscription:
+              - Protocol: Email
+                Endpoint: ${self:custom.variables.${opt:stage, self:provider.stage}.notify_email}
+
+
+      Outputs:
+        SNSTopic:
+          Value:
+            Fn::GetAtt: [ SNSTopic, TopicName ]
+          Export:
+            Name: inactive-dynamodb-SNS-Topic-Name-${opt:stage, self:provider.stage}
+        SNSARN:
+          Value:
+            !Ref SNSTopic
+          Export:
+            Name: inactive-dynamodb-SNS-ARN-${opt:stage, self:provider.stage}
