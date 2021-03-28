@@ -109,6 +109,8 @@ def _lambda_handler(event, context):
     remediations_count = 0
 
     for i in range(0, len(indiv_tables_descriptions)):
+        if indiv_tables_descriptions[i]['CapacityMode'] == 'On-Demand':
+            continue
         result = remediateWaste(indiv_tables_descriptions[i], dynamodb_client)
         if result['Action'] == 'ENABLED_ON_DEMAND_MODE':
             new_table_status.append(result)
