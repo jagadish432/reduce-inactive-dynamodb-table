@@ -12,7 +12,7 @@ from remediate import remediateWaste
 from response_utils import build_http_response, myconverter
 
 
-DAYS_TO_SEARCH_FROM = os.environ.get('days_to_search_from') or DAYS_TO_SEARCH_FROM
+DAYS_TO_SEARCH_FROM = int(os.environ.get('days_to_search_from')) if os.environ.get('days_to_search_from') is not None else DAYS_TO_SEARCH_FROM
 SNS_ARN = os.environ.get('sns_arn') or SNS_ARN
 
 # Initialize the logger object
@@ -26,6 +26,7 @@ sns_client = boto3.client('sns')
 
 
 def get_existing_tables(limit=100):
+    logger.info("Fetching all dynamodb tables")
     params = {
         "Limit": limit
     }
@@ -45,6 +46,7 @@ def maxDataPoint(data_points):
 
 
 def getMetricStatistics(table_name, metric_name):
+    logger.info(f"getting metric statistics for table - {table_name}")
     end_date = datetime.today()
     start_date = end_date - timedelta(days=DAYS_TO_SEARCH_FROM)
     start_date = datetime.combine(start_date, time.min)
@@ -71,9 +73,10 @@ def getMetricStatistics(table_name, metric_name):
 
 
 def assess_table(table_name):
+    logger.info(f"assessing table - {table_name}")
     today = datetime.today()
-    historical_date = today - timedelta(days=0, hours=0, minutes=10)
-    # historical_date = datetime.combine(historical_date, time.min)
+    historical_date = today - timedelta(days=DAYS_TO_SEARCH_FROM, hours=0, minutes=0)
+    historical_date = datetime.combine(historical_date, time.min)
     historical_date = pytz.utc.localize(historical_date)
     params = {
         'TableName': table_name

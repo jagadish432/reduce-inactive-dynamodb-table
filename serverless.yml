@@ -20,6 +20,8 @@ provider:
     days_to_search_from: ${self:custom.variables.${opt:stage, self:provider.stage}.days_to_search_from}
     sns_arn:
       Fn::ImportValue: inactive-dynamodb-SNS-ARN-${opt:stage, self:provider.stage}
+  role:
+    Fn::ImportValue: inactive-dynamodb-IAM-ARN-${opt:stage, self:provider.stage}
 
   pythonRequirements:
     pythonBin: python3.8
@@ -30,6 +32,9 @@ functions:
     name: inactiveDynamoDBFinder-${opt:stage, 'dev'}
     description: Finds inactive dynamodb tables and change their I/O mode to On-Demand and publishes message to SNS topic
     timeout: 900
+    events:
+#      - schedule: rate(3 minutes)
+      - schedule: cron(0 1 1 * ? *)
 
 
 custom:
@@ -51,6 +56,42 @@ custom:
               - Protocol: Email
                 Endpoint: ${self:custom.variables.${opt:stage, self:provider.stage}.notify_email}
 
+        IAMRole:
+          Type: AWS::IAM::Role
+          Properties:
+            AssumeRolePolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Principal:
+                    Service:
+                      - lambda.amazonaws.com
+                  Action:
+                    - 'sts:AssumeRole'
+            ManagedPolicyArns:
+              - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+            Policies:
+              - PolicyName: custom-policy
+                PolicyDocument:
+                  Version: '2012-10-17'
+                  Statement:
+                    - Effect: Allow
+                      Action:
+                        - dynamodb:List*
+                        - dynamodb:Update*
+                        - dynamodb:DescribeTable
+                      Resource: "arn:aws:dynamodb:${opt:region, self:provider.region}:${self:custom.variables.${opt:stage, self:provider.stage}.aws_account_id}:table/*"
+
+                    - Effect: Allow
+                      Action:
+                        - cloudwatch:GetMetricStatistics
+                      Resource: "*"
+
+                    - Effect: Allow
+                      Action:
+                        - SNS:Publish
+                      Resource: !Ref SNSTopic
+
 
       Outputs:
         SNSTopic:
@@ -58,8 +99,16 @@ custom:
             Fn::GetAtt: [ SNSTopic, TopicName ]
           Export:
             Name: inactive-dynamodb-SNS-Topic-Name-${opt:stage, self:provider.stage}
+
         SNSARN:
           Value:
             !Ref SNSTopic
           Export:
             Name: inactive-dynamodb-SNS-ARN-${opt:stage, self:provider.stage}
+
+        IAM:
+          Value:
+            Fn::GetAtt: [ IAMRole, Arn ]
+          Export:
+            Name: inactive-dynamodb-IAM-ARN-${opt:stage, self:provider.stage}
+
